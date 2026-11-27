@@ -1,0 +1,25 @@
+{
+  "name": "visor-arq-3d",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Visor 3D de diagramas de arquitectura sobre three.js, con importadores extensibles (drawio, glTF, OBJ, STL...)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.7",
+    "@types/three": "^0.187.0",
+    "jsdom": "^27.0.0",
+    "typescript": "~5.9.3",
+    "vite": "^8.4.0",
+    "vitest": "^5.1.2"
+  }
+}

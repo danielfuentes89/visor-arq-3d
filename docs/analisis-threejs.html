@@ -1,0 +1,409 @@
+<title>three.js por dentro</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: una columna de lectura (~68ch) con bandas anchas para el diagrama y la grilla de formatos. */
+  :root {
+    --bg: #f5f7fa;
+    --surface: #ffffff;
+    --ink: #172033;
+    --muted: #586379;
+    --line: #d9dfe8;
+    --accent: #1f6feb;
+    --accent-soft: #e3edfd;
+    --addon: #0f7b6c;
+    --addon-soft: #ddf3ef;
+    --core: #8a4b08;
+    --core-soft: #fbecd9;
+    --code-bg: #eef2f7;
+    --f-display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+    --f-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --f-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f141d; --surface: #161d29; --ink: #e4e9f2; --muted: #9aa5b8; --line: #2a3445;
+      --accent: #6ea8ff; --accent-soft: #1b2b45; --addon: #4fd1bd; --addon-soft: #12302c;
+      --core: #f2b36b; --core-soft: #3a2914; --code-bg: #1c2433; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f141d; --surface: #161d29; --ink: #e4e9f2; --muted: #9aa5b8; --line: #2a3445;
+    --accent: #6ea8ff; --accent-soft: #1b2b45; --addon: #4fd1bd; --addon-soft: #12302c;
+    --core: #f2b36b; --core-soft: #3a2914; --code-bg: #1c2433; color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.6 var(--f-body);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 40px 64px;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 56px; }
+  .prose { max-width: 68ch; }
+  h1, h2, h3 { font-family: var(--f-display); line-height: 1.15; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2rem, 5vw, 3rem); letter-spacing: -0.02em; }
+  h2 { font-size: 1.6rem; letter-spacing: -0.01em; }
+  h3 { font-size: 1.1rem; }
+  p { margin: 0; }
+  section { display: grid; gap: 18px; min-width: 0; }
+  .eyebrow { font: 500 0.75rem/1 var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+  .lede { font-size: 1.12rem; color: var(--muted); }
+  code, .mono { font-family: var(--f-mono); font-size: 0.88em; }
+  :not(pre) > code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+  pre {
+    margin: 0; padding: 16px 18px; background: var(--code-bg); border-radius: 8px; overflow-x: auto;
+    font: 0.84rem/1.55 var(--f-mono); color: var(--ink);
+  }
+  .muted { color: var(--muted); }
+  a { color: var(--accent); }
+
+  header { display: grid; gap: 14px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font: 0.82rem var(--f-mono); color: var(--muted); }
+
+  /* Diagrama del pipeline */
+  .diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px 12px; }
+  .diagram svg { display: block; min-width: 860px; width: 100%; height: auto; }
+  .d-box { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+  .d-box.hi { fill: var(--accent-soft); stroke: var(--accent); }
+  .d-box.ov { fill: var(--addon-soft); stroke: var(--addon); stroke-dasharray: 5 4; }
+  .d-t { fill: var(--ink); font: 600 14px var(--f-display); }
+  .d-s { fill: var(--muted); font: 11.5px var(--f-mono); }
+  .d-step { fill: var(--accent); font: 600 11px var(--f-mono); letter-spacing: 0.06em; }
+  .d-arrow { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  .d-head { fill: var(--muted); }
+
+  /* Pasos del renderer */
+  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+  ol.steps { margin: 0; padding-left: 1.3em; display: grid; gap: 8px; }
+  ol.steps li::marker { font-family: var(--f-mono); color: var(--accent); font-size: 0.85em; }
+
+  /* Formatos */
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+  .toolbar input {
+    font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface);
+    color: var(--ink); width: min(320px, 100%);
+  }
+  .toolbar input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .legend { display: flex; gap: 14px; font-size: 0.85rem; color: var(--muted); flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .formats { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+  .cat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 10px; align-content: start; }
+  .cat h3 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .cat h3 small { font: 0.75rem var(--f-mono); color: var(--muted); font-weight: 400; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    display: inline-flex; flex-direction: column; gap: 1px; padding: 5px 9px; border-radius: 7px;
+    background: var(--addon-soft); color: var(--ink); font-size: 0.82rem; line-height: 1.25;
+  }
+  .chip b { font: 600 0.82rem var(--f-mono); color: var(--addon); }
+  .chip.core { background: var(--core-soft); }
+  .chip.core b { color: var(--core); }
+  .chip.new { background: var(--accent-soft); outline: 1.5px dashed var(--accent); }
+  .chip.new b { color: var(--accent); }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .empty { color: var(--muted); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 600 0.78rem var(--f-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); background: var(--bg); }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { white-space: nowrap; }
+
+  figure { margin: 0; display: grid; gap: 8px; }
+  figure img { width: 100%; max-width: 100%; border-radius: 12px; border: 1px solid var(--line); display: block; }
+  figcaption { font-size: 0.86rem; color: var(--muted); }
+  .numbers { display: flex; flex-wrap: wrap; gap: 10px 28px; font-variant-numeric: tabular-nums; }
+  .numbers div { display: grid; }
+  .numbers b { font: 600 1.5rem var(--f-display); }
+  .numbers span { font-size: 0.82rem; color: var(--muted); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .chip { transition: opacity 0.15s; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Análisis del código fuente · mrdoob/three.js</span>
+    <h1>three.js por dentro</h1>
+    <p class="lede prose">Cómo convierte three.js un archivo en píxeles, qué formatos sabe leer hoy y dónde se engancha un formato nuevo. El caso práctico es <code>.drawio</code>, que three.js no trae y que el visor <b>visor-arq-3d</b> ahora importa.</p>
+    <div class="meta"><span>three.js 0.187.0 (rama dev)</span><span>src/loaders · examples/jsm/loaders</span><span>src/renderers · examples/jsm/renderers</span></div>
+  </header>
+
+  <section>
+    <span class="eyebrow">1 · El recorrido</span>
+    <h2>De bytes a píxeles en cinco etapas</h2>
+    <p class="prose">Todo loader de three.js sigue el mismo contrato: descarga con <code>FileLoader</code>, traduce el contenido en <code>parse()</code> y entrega un grafo de escena. El renderer no sabe de qué formato vino nada: solo ve objetos <code>Object3D</code> con geometría y material. Por eso agregar un formato es escribir un loader, sin tocar el renderer.</p>
+    <div class="diagram" role="img" aria-label="Pipeline: archivo, carga, parseo, grafo de escena, renderer y canvas, con capas HTML superpuestas">
+      <svg viewBox="0 0 980 300" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" class="d-head" />
+          </marker>
+        </defs>
+        <!-- etapas -->
+        <g>
+          <rect class="d-box" x="10" y="40" width="140" height="120" rx="10" />
+          <text class="d-step" x="24" y="64">ARCHIVO</text>
+          <text class="d-t" x="24" y="88">.glb .obj .stl</text>
+          <text class="d-t" x="24" y="108">.drawio …</text>
+          <text class="d-s" x="24" y="134">bytes / texto</text>
+        </g>
+        <g>
+          <rect class="d-box" x="190" y="40" width="160" height="120" rx="10" />
+          <text class="d-step" x="204" y="64">CARGA</text>
+          <text class="d-t" x="204" y="88">LoadingManager</text>
+          <text class="d-s" x="204" y="110">FileLoader</text>
+          <text class="d-s" x="204" y="128">Cache · ImageLoader</text>
+          <text class="d-s" x="204" y="146">TextureLoader</text>
+        </g>
+        <g>
+          <rect class="d-box hi" x="390" y="40" width="160" height="120" rx="10" />
+          <text class="d-step" x="404" y="64">PARSEO</text>
+          <text class="d-t" x="404" y="88">XLoader.parse()</text>
+          <text class="d-s" x="404" y="110">GLTFLoader</text>
+          <text class="d-s" x="404" y="128">OBJLoader · STLLoader</text>
+          <text class="d-s" x="404" y="146">DrawioLoader (nuevo)</text>
+        </g>
+        <g>
+          <rect class="d-box" x="590" y="40" width="170" height="120" rx="10" />
+          <text class="d-step" x="604" y="64">GRAFO DE ESCENA</text>
+          <text class="d-t" x="604" y="88">Scene › Group</text>
+          <text class="d-s" x="604" y="110">Mesh = Geometry+Material</text>
+          <text class="d-s" x="604" y="128">Line · Points · Sprite</text>
+          <text class="d-s" x="604" y="146">Light · Camera</text>
+        </g>
+        <g>
+          <rect class="d-box" x="800" y="40" width="170" height="120" rx="10" />
+          <text class="d-step" x="814" y="64">RENDER</text>
+          <text class="d-t" x="814" y="88">WebGLRenderer</text>
+          <text class="d-t" x="814" y="108">WebGPURenderer</text>
+          <text class="d-s" x="814" y="134">→ &lt;canvas&gt;</text>
+        </g>
+        <!-- flechas -->
+        <path class="d-arrow" d="M150 100 H186" marker-end="url(#ah)" />
+        <path class="d-arrow" d="M350 100 H386" marker-end="url(#ah)" />
+        <path class="d-arrow" d="M550 100 H586" marker-end="url(#ah)" />
+        <path class="d-arrow" d="M760 100 H796" marker-end="url(#ah)" />
+        <!-- capa HTML -->
+        <rect class="d-box ov" x="590" y="210" width="380" height="70" rx="10" />
+        <text class="d-step" x="604" y="234">CAPAS HTML / VECTOR (addons)</text>
+        <text class="d-s" x="604" y="256">CSS2DRenderer · CSS3DRenderer · SVGRenderer</text>
+        <text class="d-s" x="604" y="272">mismo grafo y cámara; DOM encima del canvas</text>
+        <path class="d-arrow" d="M675 160 V206" marker-end="url(#ah)" />
+        <text class="d-s" x="24" y="200">Etapas 1–3: cada formato trae su loader.</text>
+        <text class="d-s" x="24" y="218">Etapas 4–5: comunes a todos los formatos.</text>
+      </svg>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">2 · El renderer</span>
+    <h2>Qué hace <code>renderer.render(scene, camera)</code></h2>
+    <div class="two">
+      <div class="panel">
+        <h3>WebGLRenderer <span class="muted mono">src/renderers/webgl</span></h3>
+        <ol class="steps">
+          <li>Actualiza matrices: <code>scene.updateMatrixWorld()</code> y la cámara.</li>
+          <li>Recorre el grafo (<code>projectObject</code>), descarta lo que queda fuera del frustum y arma listas: opacos, transmisivos y transparentes.</li>
+          <li>Ordena: opacos de frente a fondo, transparentes de fondo a frente, siempre respetando <code>renderOrder</code>.</li>
+          <li>Renderiza mapas de sombra (<code>WebGLShadowMap</code>).</li>
+          <li>Por cada objeto, <code>WebGLPrograms</code> elige o compila el shader a partir de <code>ShaderLib</code> y <code>ShaderChunk</code>, según material y luces.</li>
+          <li>Sube a la GPU los atributos del <code>BufferGeometry</code> y las texturas, fija uniforms y emite <code>drawElements</code> / <code>drawArrays</code> (instanciados si aplica).</li>
+        </ol>
+      </div>
+      <div class="panel">
+        <h3>WebGPURenderer <span class="muted mono">src/renderers/common · webgpu</span></h3>
+        <ol class="steps">
+          <li>Misma escena y mismas listas de render (<code>RenderObjects</code>, <code>RenderLists</code>).</li>
+          <li>Los materiales se describen con nodos <b>TSL</b> (Three Shading Language).</li>
+          <li><code>NodeBuilder</code> traduce el grafo de nodos a WGSL, o a GLSL si cae al backend <code>webgl-fallback</code>.</li>
+          <li>El backend (<code>WebGPUBackend</code> o <code>WebGLBackend</code>) crea pipelines y bind groups y graba los comandos.</li>
+          <li>Para un loader, nada cambia: entrega los mismos <code>Object3D</code> a cualquiera de los dos.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">3 · Formatos</span>
+    <h2>Lo que three.js importa hoy</h2>
+    <p class="prose">El núcleo (<code>src/loaders</code>) solo trae infraestructura y el formato JSON propio. Casi todo lo demás vive como addon en <code>examples/jsm/loaders</code> y se importa desde <code>three/addons/…</code>.</p>
+    <div class="toolbar">
+      <input id="q" type="search" placeholder="Filtrar: glb, nube de puntos, textura…" aria-label="Filtrar formatos">
+      <div class="legend">
+        <span><i class="dot" style="background: var(--core)"></i>núcleo</span>
+        <span><i class="dot" style="background: var(--addon)"></i>addon</span>
+        <span><i class="dot" style="background: var(--accent)"></i>agregado en visor-arq-3d</span>
+      </div>
+    </div>
+    <div class="formats" id="formats">
+      <div class="cat">
+        <h3>Modelos 3D <small>escenas y mallas</small></h3>
+        <div class="chips">
+          <span class="chip"><b>.gltf .glb</b>GLTFLoader</span>
+          <span class="chip"><b>.fbx</b>FBXLoader</span>
+          <span class="chip"><b>.obj</b>OBJLoader + MTLLoader</span>
+          <span class="chip"><b>.stl</b>STLLoader</span>
+          <span class="chip"><b>.ply</b>PLYLoader</span>
+          <span class="chip"><b>.dae</b>ColladaLoader</span>
+          <span class="chip"><b>.3mf</b>3MFLoader</span>
+          <span class="chip"><b>.amf</b>AMFLoader</span>
+          <span class="chip"><b>.3ds</b>TDSLoader</span>
+          <span class="chip"><b>.usd .usdz</b>USDLoader · USDZLoader</span>
+          <span class="chip"><b>.wrl</b>VRMLLoader</span>
+          <span class="chip"><b>.vtk .vtp</b>VTKLoader</span>
+          <span class="chip"><b>.lwo</b>LWOLoader</span>
+          <span class="chip"><b>.md2</b>MD2Loader</span>
+          <span class="chip"><b>.ldr .mpd</b>LDrawLoader</span>
+          <span class="chip"><b>.kmz</b>KMZLoader</span>
+          <span class="chip"><b>.3dm</b>3DMLoader (Rhino)</span>
+          <span class="chip"><b>.vox</b>VOXLoader</span>
+          <span class="chip core"><b>.json</b>ObjectLoader</span>
+          <span class="chip core"><b>.json</b>BufferGeometryLoader</span>
+        </div>
+      </div>
+      <div class="cat">
+        <h3>Nubes de puntos y splats <small>escaneos</small></h3>
+        <div class="chips">
+          <span class="chip"><b>.pcd</b>PCDLoader</span>
+          <span class="chip"><b>.xyz</b>XYZLoader</span>
+          <span class="chip"><b>.ply</b>GaussianSplatPLYLoader</span>
+          <span class="chip"><b>.splat</b>SPLATLoader</span>
+          <span class="chip"><b>.ksplat</b>KSPLATLoader</span>
+          <span class="chip"><b>.spz</b>SPZLoader</span>
+        </div>
+      </div>
+      <div class="cat">
+        <h3>Texturas e imágenes <small>mapas y entornos</small></h3>
+        <div class="chips">
+          <span class="chip core"><b>.png .jpg .webp</b>TextureLoader</span>
+          <span class="chip core"><b>cubemap</b>CubeTextureLoader</span>
+          <span class="chip"><b>.ktx2</b>KTX2Loader (Basis)</span>
+          <span class="chip"><b>.ktx</b>KTXLoader</span>
+          <span class="chip"><b>.dds</b>DDSLoader</span>
+          <span class="chip"><b>.pvr</b>PVRLoader</span>
+          <span class="chip"><b>.tga</b>TGALoader</span>
+          <span class="chip"><b>.tif</b>TIFFLoader</span>
+          <span class="chip"><b>.exr</b>EXRLoader</span>
+          <span class="chip"><b>.hdr</b>HDRLoader · RGBELoader</span>
+          <span class="chip"><b>.jpg HDR</b>UltraHDRLoader</span>
+          <span class="chip"><b>.jxl</b>JXLLoader</span>
+        </div>
+      </div>
+      <div class="cat">
+        <h3>Vectorial y texto <small>2D</small></h3>
+        <div class="chips">
+          <span class="chip"><b>.svg</b>SVGLoader</span>
+          <span class="chip"><b>.json</b>FontLoader (typeface)</span>
+          <span class="chip"><b>.ttf</b>TTFLoader</span>
+          <span class="chip new"><b>.drawio</b>DrawioLoader</span>
+        </div>
+      </div>
+      <div class="cat">
+        <h3>Animación <small>esqueletos y vértices</small></h3>
+        <div class="chips">
+          <span class="chip"><b>.bvh</b>BVHLoader</span>
+          <span class="chip"><b>.mdd</b>MDDLoader</span>
+          <span class="chip core"><b>.json</b>AnimationLoader</span>
+        </div>
+      </div>
+      <div class="cat">
+        <h3>Ciencia, fabricación y otros <small>especializados</small></h3>
+        <div class="chips">
+          <span class="chip"><b>.pdb</b>PDBLoader (moléculas)</span>
+          <span class="chip"><b>.nrrd</b>NRRDLoader (volúmenes)</span>
+          <span class="chip"><b>.gcode</b>GCodeLoader</span>
+          <span class="chip"><b>.ies</b>IESLoader (fotometría)</span>
+          <span class="chip"><b>.cube .3dl</b>LUTCubeLoader · LUT3dlLoader</span>
+          <span class="chip"><b>.mtlx</b>MaterialXLoader</span>
+          <span class="chip"><b>draco</b>DRACOLoader (compresión)</span>
+          <span class="chip core"><b>.mp3 .ogg</b>AudioLoader</span>
+        </div>
+      </div>
+    </div>
+    <p class="empty" id="empty" hidden>Ningún formato coincide con ese filtro.</p>
+    <p class="muted prose"><b>Exportadores</b> (<code>examples/jsm/exporters</code>): GLTF, OBJ, STL, PLY, USDZ, Draco, EXR y KTX2. Sirven para el camino inverso, por ejemplo exportar el diagrama 3D a <code>.glb</code>.</p>
+  </section>
+
+  <section>
+    <span class="eyebrow">4 · Extender</span>
+    <h2>Cómo se agrega un formato</h2>
+    <p class="prose">Un loader extiende <code>THREE.Loader</code>, descarga con <code>FileLoader</code> y traduce el contenido en <code>parse()</code>. El resultado es un <code>Object3D</code> que cualquier renderer dibuja. Este es el esqueleto del <code>DrawioLoader</code> del visor:</p>
+<pre><code>export class DrawioLoader extends THREE.Loader&lt;DrawioLoadResult&gt; {
+  load(url, onLoad, onProgress, onError) {
+    const loader = new THREE.FileLoader(this.manager);
+    loader.setResponseType('text');
+    loader.load(url, (text) =&gt; this.parse(text).then(onLoad, onError), onProgress, onError);
+  }
+
+  async parse(text: string) {
+    const document = await parseDrawio(text);           // XML mxfile → modelo intermedio
+    const pages = document.pages.map((p) =&gt; buildDrawioPage(p)); // modelo → THREE.Group
+    return { document, pages };
+  }
+}
+
+// En la app, cada formato es un adaptador registrado:
+registry.register({ id: 'drawio', extensions: ['drawio', 'dio', 'xml'], load: … });</code></pre>
+    <p class="prose">draw.io es un caso interesante porque es un formato 2D: no trae alturas ni materiales. El importador decide cómo se ve en 3D:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Elemento draw.io</th><th>Objeto three.js</th><th>Detalle</th></tr></thead>
+        <tbody>
+          <tr><td>Página <code>&lt;diagram&gt;</code></td><td><code>Group</code></td><td>Una vista por página. Soporta páginas comprimidas (base64 + deflate-raw).</td></tr>
+          <tr><td>Contenedor</td><td>Losa translúcida (<code>BoxGeometry</code>) + contorno</td><td>Sube un nivel por anidación. Si el archivo no anida de verdad (todo cuelga de la capa raíz), la anidación se infiere por contención geométrica.</td></tr>
+          <tr><td><code>shape=image</code></td><td><code>Sprite</code> con textura</td><td>Iconos SVG o PNG embebidos como data URI, rasterizados a canvas y cacheados por URI.</td></tr>
+          <tr><td>Rectángulo, elipse</td><td><code>Mesh</code> (caja o cilindro bajo)</td><td>Color de <code>fillColor</code>, borde de <code>strokeColor</code>; <code>dashed=1</code> da línea punteada.</td></tr>
+          <tr><td>Texto, etiquetas</td><td><code>CSS2DObject</code></td><td>HTML nítido sobre el canvas, con tamaño proporcional al zoom y ajuste de línea al ancho de la celda.</td></tr>
+          <tr><td>Conector</td><td><code>Line2</code> + cono de flecha</td><td>Puertos <code>exitX/entryX</code>, waypoints y codos ortogonales; la altura se interpola entre los niveles de origen y destino.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">5 · Resultado</span>
+    <h2>El visor con el diagrama de ejemplo</h2>
+    <figure>
+      <img src="img/visor-ejemplo.jpg" alt="Visor 3D mostrando un diagrama de arquitectura con contenedores apilados por nivel, iconos de servicios y conectores" width="1100" height="680">
+      <figcaption>Diagrama de ejemplo del repositorio con niveles separados: cada contenedor anidado flota sobre su padre, unido por líneas guía.</figcaption>
+    </figure>
+    <p class="prose">Con el diagrama de arquitectura de prueba (2 páginas) el importador reconoció todo el contenido del archivo:</p>
+    <div class="numbers">
+      <div><b>256</b><span>nodos</span></div>
+      <div><b>41</b><span>conexiones</span></div>
+      <div><b>42</b><span>contenedores inferidos</span></div>
+      <div><b>67</b><span>iconos embebidos</span></div>
+      <div><b>6</b><span>niveles de anidación</span></div>
+    </div>
+  </section>
+</div>
+
+<script>
+  const q = document.getElementById('q');
+  const cats = [...document.querySelectorAll('#formats .cat')];
+  const empty = document.getElementById('empty');
+  q.addEventListener('input', () => {
+    const term = q.value.trim().toLowerCase();
+    let shown = 0;
+    for (const cat of cats) {
+      const title = cat.querySelector('h3').textContent.toLowerCase();
+      let any = false;
+      for (const chip of cat.querySelectorAll('.chip')) {
+        const hit = !term || title.includes(term) || chip.textContent.toLowerCase().includes(term);
+        chip.hidden = !hit;
+        any ||= hit;
+      }
+      cat.hidden = !any;
+      if (any) shown++;
+    }
+    empty.hidden = shown > 0;
+  });
+</script>
