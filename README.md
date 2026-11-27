@@ -24,6 +24,18 @@ En el visor: **Abrir archivo** o arrastrar un archivo a la ventana.
 - Clic sobre un elemento: panel con su id, contenedor, origen/destino y estilo draw.io.
 - Las etiquetas escalan con el zoom; se ocultan cuando quedarían ilegibles, así que hay que acercarse para leer.
 
+## Despliegue (GitHub Pages, US$0)
+
+El visor es 100 % estático y los diagramas se procesan en el navegador (no se suben a ningún servidor).
+El workflow `.github/workflows/deploy-pages.yml` corre los tests, construye con `BASE_PATH=/visor-arq-3d/`
+y publica en cada push a la rama por defecto:
+
+- Visor: https://danielfuentes89.github.io/visor-arq-3d/
+- Análisis: https://danielfuentes89.github.io/visor-arq-3d/docs/analisis-threejs.html
+
+Activación (una sola vez): **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+Después se puede relanzar desde **Actions → Deploy GitHub Pages → Run workflow**.
+
 ## Estructura
 
 ```
